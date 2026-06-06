@@ -8,10 +8,11 @@ from sklearn.datasets import make_blobs, make_moons
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score
 from scipy.spatial.distance import cdist
+from scipy.cluster.hierarchy import dendrogram, linkage
 
 st.set_page_config(page_title="Análisis de Clustering", layout="centered")
 
-st.title("Análisis de Clustering: K-Means y DBSCAN")
+st.title("Análisis de Clustering: K-Means, DBSCAN y Jerárquico")
 
 st.sidebar.header("Parámetros del Entorno")
 dataset_type = st.sidebar.selectbox("Conjunto de Datos:", [
@@ -35,7 +36,9 @@ st.sidebar.header("Configuración del Modelo")
 algorithm = st.sidebar.selectbox("Algoritmo:", [
     "K-Means (Iterativo)", 
     "K-Means (Final)", 
-    "DBSCAN"
+    "K-Means (Método del Codo)",
+    "DBSCAN",
+    "Clustering Jerárquico (Dendrograma)"
 ])
 
 fig, ax = plt.subplots(figsize=(10, 6.5))
@@ -88,6 +91,25 @@ elif algorithm == "K-Means (Final)":
     if len(set(model.labels_)) > 1:
         sil_score = silhouette_score(X, model.labels_)
 
+elif algorithm == "K-Means (Método del Codo)":
+    st.info("💡 Calculando la inercia (WCSS) para múltiples valores de K para encontrar el número óptimo de clusters.")
+    inercia = []
+    K_range = range(1, 11)
+    for k_val in K_range:
+        model = KMeans(n_clusters=k_val, random_state=42)
+        model.fit(X)
+        inercia.append(model.inertia_)
+        
+    ax.plot(K_range, inercia, marker='o', linestyle='-', color='b', linewidth=2, markersize=8)
+    ax.set_title("Método del Codo (Elbow Method) para K-Means", fontsize=14)
+    xlabel = "Número de Clusters (K)"
+    ylabel = "Inercia (Suma de Errores Cuadráticos)"
+    
+    # Marcador visual en el codo (K=4 para el Caso A)
+    if "Clientes" in dataset_type:
+        ax.axvline(x=4, color='red', linestyle='--', label="Codo Óptimo Sugerido (K=4)")
+        ax.legend()
+
 elif algorithm == "DBSCAN":
     if "Clientes" in dataset_type:
         eps_val = st.sidebar.slider("Epsilon", 5.0, 30.0, 12.0, step=1.0)
@@ -120,6 +142,24 @@ elif algorithm == "DBSCAN":
     if len(unique_labels) > 1 and not (len(unique_labels) == 2 and -1 in unique_labels):
         sil_score = silhouette_score(X, labels)
 
+elif algorithm == "Clustering Jerárquico (Dendrograma)":
+    method = st.sidebar.selectbox("Método de Enlace:", ["ward", "complete", "average", "single"])
+    
+    if n_samples > 100:
+        st.caption("💡 Se muestra una submuestra de 100 datos para que las hojas del árbol sean legibles.")
+        np.random.seed(42)
+        X_sample = X[np.random.choice(X.shape[0], 100, replace=False)]
+    else:
+        X_sample = X
+        
+    Z = linkage(X_sample, method=method)
+    dendrogram(Z, ax=ax)
+    
+    ax.set_title(f"Dendrograma Jerárquico (Enlace: {method})", fontsize=14)
+    xlabel = "Índice de la Observación"
+    ylabel = "Distancia de Fusión"
+    sil_score = -1
+
 ax.set_xlabel(xlabel)
 ax.set_ylabel(ylabel)
 ax.grid(True, linestyle='--', alpha=0.4)
@@ -128,5 +168,5 @@ st.pyplot(fig)
 st.markdown("---")
 if sil_score != -1:
     st.metric(label="Coeficiente de Silhouette", value=f"{sil_score:.3f}")
-else:
+elif algorithm not in ["Clustering Jerárquico (Dendrograma)", "K-Means (Método del Codo)"]:
     st.metric(label="Coeficiente de Silhouette", value="N/A")
